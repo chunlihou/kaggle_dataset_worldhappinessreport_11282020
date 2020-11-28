@@ -1,0 +1,722 @@
+---
+title: "World Happiness Report 2019"
+author: "Chun-Li Hou"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Content
+
+- [Introduction](#1)
+    - [Background](#1.1)
+    - [Mission](#1.2)
+- [Preparation](#2)
+    - [Environment](#2.1)
+    - [Dataset](#2.2)
+- [Visualization](#3)
+    - [Correlation plot](#3.1)
+    - [Comparing different continents regarding their happiness variables](#3.2)
+    - [Correlation plot for each continent](#3.3)
+    - [Happiness score comparison on different continents](#3.4)
+    - [Scatter plot with regression line](#3.5)
+    - [Scatter plot colored by Continents](#3.6)
+    - [3D Plot](#3.7)
+- [Prediction](#4)
+    - [Partition](#4.1)
+    - [Machine learning algorithms](#4.2)
+        - [Multiple Linear Regression](#4.2.1)
+        - [Support Vector Regression](#4.2.2)
+        - [Decision Tree](#4.2.3)
+        - [Random Forest](#4.2.4)
+        - [Neural Net](#4.2.5)
+    - [Evaluation](#4.3)
+- [Conclusion](#5)
+- [Reference](#6)
+
+## Introduction <a name = "1"></a>
+
+### Background <a name = "1.1"></a>
+
+The dataset is happiness 2019 dataset. It comes from Kaggle's dataset. This dataset gives the happiness rank and happiness score of 156 countries around the world based on seven factors, including family, life expectancy, economy, generosity, trust in government, freedom, and dystopia residual. Sum of the value of these seven factors gives us the happiness score. So, it is evident that the higher value of each of these seven factors means the level of happiness is higher.
+
+### Mission <a name = "1.2"></a>
+
+The purpose of choosing the work is to find out which factors are more important to live a happier life. As a result, people and countries can focus on the more significant factors to achieve a higher happiness level. We also implement several machine learning algorithms to predict the happiness score and compare the result to discover which algorithm works better for this specific dataset.
+
+## Preparation <a name = "2"></a>
+
+### Environment <a name = "2.1"></a>
+
+```{r, message = FALSE}
+# setting gotop
+gotop::use_gotop()
+
+# loading packages
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(plyr, dplyr, tidyverse, lubridate, caTools, ggplot2, ggthemes, reshape2, data.table, tidyr,
+               corrgram, corrplot, formattable, cowplot, ggpubr, plot3D, RColorBrewer, rgl, car, plotly, 
+               caTools, forecast, e1071, rpart, rpart.plot, rattle, randomForest, neuralnet)
+```
+
+### Dataset <a name = "2.2"></a>
+
+```{r}
+# importing dataset
+df.0 = read.csv("2019.csv")
+df.1 = df.0[, c(2, 1, 3, 4, 5, 6, 7, 8, 9)]
+
+# renaming columns
+colnames(df.1) = c("Country",
+                   "Happiness.Rank",
+                   "Happiness.Score",
+                   "Economy",
+                   "Family",
+                   "Life.Expectancy",
+                   "Freedom",
+                   "Generosity",
+                   "Trust")
+
+# creating a new column for continents
+df.1$Continent = NA
+
+# Asia
+df.1$Continent[which(df.1$Country %in% c("Israel", "United Arab Emirates", "Singapore", "Thailand",
+                                         "Taiwan", "Qatar", "Saudi Arabia", "Kuwait", "Bahrain", 
+                                         "Malaysia", "Uzbekistan", "Japan", "South Korea", "Turkmenistan",
+                                         "Kazakhstan", "Turkey", "Hong Kong", "Philippines", "Jordan",
+                                         "China", "Pakistan", "Indonesia", "Azerbaijan", "Lebanon",
+                                         "Vietnam", "Tajikistan", "Bhutan", "Kyrgyzstan", "Nepal", 
+                                         "Mongolia", "Palestinian Territories", "Iran", "Bangladesh",
+                                         "Myanmar", "Iraq", "Sri Lanka", "Armenia", "India", "Georgia",
+                                         "Cambodia", "Afghanistan", "Yemen", "Syria", "Laos", 
+                                         "Northern Cyprus"))] = "Asia"
+# Europe
+df.1$Continent[which(df.1$Country %in% c("Norway", "Denmark", "Iceland", "Switzerland", "Finland",
+                                         "Netherlands", "Sweden", "Austria", "Ireland", "Germany",
+                                         "Belgium", "Luxembourg", "United Kingdom", "Czech Republic",
+                                         "Malta", "France", "Spain", "Slovakia", "Poland", "Italy",
+                                         "Russia", "Lithuania", "Latvia", "Moldova", "Romania",
+                                         "Slovenia", "North Cyprus", "Cyprus", "Estonia", "Belarus",
+                                         "Serbia", "Hungary", "Croatia", "Kosovo", "Montenegro",
+                                         "Greece", "Portugal", "Bosnia and Herzegovina", "Macedonia",
+                                         "Bulgaria", "Albania", "Ukraine", "North Macedonia"))] = "Europe"
+# North America
+df.1$Continent[which(df.1$Country %in% c("Canada", "Costa Rica", "United States", "Mexico", "Panama", 
+                                         "El Salvador", "Belize", "Guatemala", "Jamaica", "Nicaragua",
+                                         "Dominican Republic", "Honduras", "Haiti"))] = "North America"
+# South America
+df.1$Continent[which(df.1$Country %in% c("Chile", "Brazil", "Argentina", "Uruguay", "Colombia", "Ecuador",
+                                         "Bolivia", "Peru", "Paraguay", "Venezuela", 
+                                         "Trinidad & Tobago"))] = "South America"
+# Australia
+df.1$Continent[which(df.1$Country %in% c("New Zealand", "Australia"))] = "Australia"
+
+# Africa
+df.1$Continent[which(is.na(df.1$Continent))] = "Africa"
+
+# reordering columns
+df.2 = df.1[, c(1, 10, 2, 3, 4, 5, 6, 7, 8, 9)]
+
+# encoding factor columns
+df.2$Country = as.factor(df.2$Country)
+df.2$Continent = as.factor(df.2$Continent)
+
+# attaching dataset
+attach(df.2)
+glimpse(df.2)
+```
+
+1. Country: Name of countries
+2. Happiness.Rank: Rank of the country based on the Happiness Score
+3. Happiness.Score: Happiness measurement on a scale of 0 to 10
+4. Economy: GDP per captia is a measure of the total output of a country that takes the gross domestic product (GDP) and divides it by the number of people in that country
+5. Family: Importance of having a family
+6. Life.Expectancy: Importance of health and amount of time prople expect to live
+7. Freedom: Importance of freedom in each country
+8. Generosity: The quality of being kind and generous
+9. Trust: Perception of corruption in a government
+
+## Visualization <a name = "3"></a>
+
+### Correlation plot <a name = "3.1"></a>
+
+```{r}
+# finding the correlation between numerical columns
+num.cols = sapply(df.2, is.numeric)
+cor.data = cor(df.2[, num.cols])
+col = colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(cor.data, method = "color", col = col(200), 
+         type = "lower", addCoef.col = "black", tl.col = "black", tl.cex = 0.7)
+```
+
+```{r}
+# removing happiness.rank
+cor.data = cor(df.2[, c(4:10)])
+corrplot(cor.data, method = "color", col = col(200), 
+         type = "lower", addCoef.col = "black", tl.col = "black", tl.cex = 0.7)
+```
+
+According to the above correlation plot, Economy, Family, and Life.Expectancy play the most significant role in contributing to happiness. Trust and Generosity have the lowest impact on the happiness score.
+
+### Comparing different continents regarding their happiness variables <a name = "3.2"></a>
+
+```{r, message = FALSE, warning = FALSE}
+# aggregating by continent
+df.2.continent = df.2 %>% select(-3) %>% group_by(Continent) %>% 
+    summarise_at(vars(-Country), funs(mean(., na.rm = T)))
+
+# melting
+df.2.melt = melt(df.2.continent)
+
+# faceting
+ggplot(df.2.melt, aes(y = value, x = Continent, color = Continent, fill = Continent)) +
+    geom_bar(stat = "identity") +
+    facet_wrap(~variable) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3)) +
+    labs(title = "Average value of happiness variables for different continents", y = "Average value")
+```
+
+We can see that Australia has approximately the highest average in all fields. After Australia, Europe, North America, and South America are roughly the same as the second. Finally, Asia and Africa have the lowest scores in all fields.
+
+### Correlation plot for each continent <a name = "3.3"></a>
+
+```{r}
+par(mfrow = c(2, 3))
+cor.data = cor(df.2[df.2$Continent == "Africa", c(4:10)])
+corrplot(cor.data, method = "color", col = brewer.pal(n = 7, name = "RdBu"), addgrid.col = "black",
+         type = "lower", tl.col = "black", tl.cex = 0.7)
+cor.data = cor(df.2[df.2$Continent == "Asia", c(4:10)])
+corrplot(cor.data, method = "color", col = brewer.pal(n = 7, name = "RdBu"), addgrid.col = "black",
+         type = "lower", tl.col = "black", tl.cex = 0.7)
+cor.data = cor(df.2[df.2$Continent == "Australia", c(4:10)])
+corrplot(cor.data, method = "color", col = brewer.pal(n = 7, name = "RdBu"), addgrid.col = "black",
+         type = "lower", tl.col = "black", tl.cex = 0.7)
+cor.data = cor(df.2[df.2$Continent == "Europe", c(4:10)])
+corrplot(cor.data, method = "color", col = brewer.pal(n = 7, name = "RdBu"), addgrid.col = "black",
+         type = "lower", tl.col = "black", tl.cex = 0.7)
+cor.data = cor(df.2[df.2$Continent == "North America", c(4:10)])
+corrplot(cor.data, method = "color", col = brewer.pal(n = 7, name = "RdBu"), addgrid.col = "black",
+         type = "lower", tl.col = "black", tl.cex = 0.7)
+cor.data = cor(df.2[df.2$Continent == "South America", c(4:10)])
+corrplot(cor.data, method = "color", col = brewer.pal(n = 7, name = "RdBu"), addgrid.col = "black",
+         type = "lower", tl.col = "black", tl.cex = 0.7)
+```
+
+- Correlation between "Happiness Score" and other variables in Africa:
+1. Positive contribution: Economy = Family > Life.Expectancy = Freedom
+2. Negative contribution: Generosity = Trust
+
+- Correlation between "Happiness Score" and other variables in Aisa:
+1. Positive contribution: Economy > Family = Life.Expectancy = Freedom > Trust
+2. No contribution: **Generosity**
+
+- Correlation between "Happiness Score" and other variables in Australia:  
+1. No meaning due to only 2 countries in the group
+
+- Correlation between "Happiness Score" and other variables in Europe:
+1. Positive contribution: Economy = Freedom = Trust > Family = Life.Expectancy = **Generosity**
+
+- Correlation between "Happiness Score" and other variables in North America:
+1. Positive contribution: Economy = Family = Life.Expectancy = Freedom > Trust
+2. Negative contribution: **Generosity**
+
+- Correlation between "Happiness Score" and other variables in South America:
+1. Positive contribution: Economy = Generosity = Freedom > Trust = Life.Expectancy
+2. No contribution: **Family**
+
+### Happiness score comparison on different continents <a name = "3.4"></a>
+
+```{r}
+# plot
+ggplot(df.2, aes(x = Continent, y = Happiness.Score)) +
+    geom_violin(aes(fill = Continent), alpha = 0.7) +
+    geom_jitter(alpha = 0.5, size = 0.7, width = 0.05) +
+    theme_bw() +
+    labs(title = "Value of happiness variables in different continents", y = "Value", x = NULL) +
+    theme(plot.title = element_text(face = "bold", size = (15)),
+          axis.title = element_text(size = (10)))
+```
+
+```{r, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 2}
+# table
+stable = desc_statby(df.2, measure.var = "Happiness.Score", grps = "Continent")
+stable %>% mutate(across(is.numeric, ~ round(., 2))) %>% ggtexttable(rows = NULL, theme = ttheme("classic"))
+# length: the number of elements in each group
+# min: minimum
+# max: maximum
+# median: median
+# mean: mean
+# iqr: interquartile range
+# mad: median absolute deviation (see ?MAD)
+# sd: standard deviation of the mean
+# se: standard error of the mean
+# ci: confidence interval of the mean
+# range: the range = max - min
+# cv: coefficient of variation, sd/mean
+# var: variance, sd^2
+```
+
+As for the median of "Happiness Score":
+
+1. Australia
+2. North America
+3. Europe
+4. South America
+5. Asia
+6. Africa
+
+### Scatter plot with regression line <a name = "3.5"></a>
+
+```{r, message = FALSE, warning = FALSE}
+# happiness score vs life expectancy 
+ggplot(df.2, aes(x = Life.Expectancy, y = Happiness.Score)) +
+    geom_point(aes(color = Continent), size = 2, alpha = 0.8) +
+    geom_smooth(aes(color = Continent, fill = Continent), method = "lm", fullrange = T) +
+    facet_wrap(~Continent) +
+    theme_bw() +
+    labs(title = "Scatter plot with regression line")
+```
+
+```{r, message = FALSE, warning = FALSE}
+# happiness score vs economy 
+ggplot(df.2, aes(x = Economy, y = Happiness.Score)) +
+    geom_point(aes(color = Continent), size = 2, alpha = 0.8) +
+    geom_smooth(aes(color = Continent, fill = Continent), method = "lm", fullrange = T) +
+    facet_wrap(~Continent) +
+    theme_bw() +
+    labs(title = "Scatter plot with regression line")
+```
+
+```{r, message = FALSE, warning = FALSE}
+# happiness score vs family 
+ggplot(df.2, aes(x = Family, y = Happiness.Score)) +
+    geom_point(aes(color = Continent), size = 2, alpha = 0.8) +
+    geom_smooth(aes(color = Continent, fill = Continent), method = "lm", fullrange = T) +
+    facet_wrap(~Continent) +
+    theme_bw() +
+    labs(title = "Scatter plot with regression line")
+```
+
+```{r, message = FALSE, warning = FALSE}
+# happiness score vs freedom 
+ggplot(df.2, aes(x = Freedom, y = Happiness.Score)) +
+    geom_point(aes(color = Continent), size = 2, alpha = 0.8) +
+    geom_smooth(aes(color = Continent, fill = Continent), method = "lm", fullrange = T) +
+    facet_wrap(~Continent) +
+    theme_bw() +
+    labs(title = "Scatter plot with regression line")
+```
+
+```{r, message = FALSE, warning = FALSE}
+# happiness score vs generosity 
+ggplot(df.2, aes(x = Generosity, y = Happiness.Score)) +
+    geom_point(aes(color = Continent), size = 2, alpha = 0.8) +
+    geom_smooth(aes(color = Continent, fill = Continent), method = "lm", fullrange = T) +
+    facet_wrap(~Continent) +
+    theme_bw() +
+    labs(title = "Scatter plot with regression line")
+```
+
+```{r, message = FALSE, warning = FALSE}
+# happiness score vs trust 
+ggplot(df.2, aes(x = Trust, y = Happiness.Score)) +
+    geom_point(aes(color = Continent), size = 2, alpha = 0.8) +
+    geom_smooth(aes(color = Continent, fill = Continent), method = "lm", fullrange = T) +
+    facet_wrap(~Continent) +
+    theme_bw() +
+    labs(title = "Scatter plot with regression line")
+```
+
+Correlaton with "Happiness Score":
+
+- Life.Expectancy: North America (Most positive correlation)
+- Economy: Europe (Most positive correlation)
+- Family: South America (Only one no correlation)
+- Freedom: North America (Most positive correlation)
+- Generosity: North America (Most negative correlation)
+- Trust: Africa (Most negative correlation)
+
+### Scatter plot colored by Continents <a name = "3.6"></a>
+
+```{r, fig.width = 15, fig.height = 10}
+# Life.Expectancy
+sp = ggscatter(df.2, x = "Life.Expectancy", y = "Happiness.Score",
+               color = "Continent", palette = "jco",
+               size = 2, alpha = 0.6)
+xbp = ggboxplot(df.2$Life.Expectancy, width = 0.3, fill = "lightgray") +
+    rotate() +
+    theme_transparent()
+ybp = ggboxplot(df.2$Happiness.Score, width = 0.3, fill = "lightgray") +
+    theme_transparent()
+xbp_grob = ggplotGrob(xbp)
+ybp_grob = ggplotGrob(ybp)
+xmin = min(df.2$Life.Expectancy); xmax = max(df.2$Life.Expectancy)
+ymin = min(df.2$Happiness.Score); ymax = max(df.2$Happiness.Score)
+yoffset = (1/15)*ymax; xoffset = (1/15)*xmax
+p.1 = sp + annotation_custom(grob = xbp_grob, xmin = xmin, xmax = xmax, 
+                             ymin = ymin-yoffset, ymax = ymin+yoffset) +
+    annotation_custom(grob = ybp_grob,
+                      xmin = xmin-xoffset, xmax = xmin+xoffset, 
+                      ymin = ymin, ymax = ymax)
+
+# Economy
+sp = ggscatter(df.2, x = "Economy", y = "Happiness.Score",
+               color = "Continent", palette = "jco",
+               size = 2, alpha = 0.6)
+xbp = ggboxplot(df.2$Economy, width = 0.3, fill = "lightgray") +
+    rotate() +
+    theme_transparent()
+ybp = ggboxplot(df.2$Happiness.Score, width = 0.3, fill = "lightgray") +
+    theme_transparent()
+xbp_grob = ggplotGrob(xbp)
+ybp_grob = ggplotGrob(ybp)
+xmin = min(df.2$Economy); xmax = max(df.2$Economy)
+ymin = min(df.2$Happiness.Score); ymax = max(df.2$Happiness.Score)
+yoffset = (1/15)*ymax; xoffset = (1/15)*xmax
+p.2 = sp + annotation_custom(grob = xbp_grob, xmin = xmin, xmax = xmax, 
+                             ymin = ymin-yoffset, ymax = ymin+yoffset) +
+    annotation_custom(grob = ybp_grob,
+                      xmin = xmin-xoffset, xmax = xmin+xoffset, 
+                      ymin = ymin, ymax = ymax)
+
+# Family
+sp = ggscatter(df.2, x = "Family", y = "Happiness.Score",
+               color = "Continent", palette = "jco",
+               size = 2, alpha = 0.6)
+xbp = ggboxplot(df.2$Family, width = 0.3, fill = "lightgray") +
+    rotate() +
+    theme_transparent()
+ybp = ggboxplot(df.2$Happiness.Score, width = 0.3, fill = "lightgray") +
+    theme_transparent()
+xbp_grob = ggplotGrob(xbp)
+ybp_grob = ggplotGrob(ybp)
+xmin = min(df.2$Family); xmax = max(df.2$Family)
+ymin = min(df.2$Happiness.Score); ymax = max(df.2$Happiness.Score)
+yoffset = (1/15)*ymax; xoffset = (1/15)*xmax
+p.3 = sp + annotation_custom(grob = xbp_grob, xmin = xmin, xmax = xmax, 
+                             ymin = ymin-yoffset, ymax = ymin+yoffset) +
+    annotation_custom(grob = ybp_grob,
+                      xmin = xmin-xoffset, xmax = xmin+xoffset, 
+                      ymin = ymin, ymax = ymax)
+
+# Freedom
+sp = ggscatter(df.2, x = "Freedom", y = "Happiness.Score",
+               color = "Continent", palette = "jco",
+               size = 2, alpha = 0.6)
+xbp = ggboxplot(df.2$Freedom, width = 0.3, fill = "lightgray") +
+    rotate() +
+    theme_transparent()
+ybp = ggboxplot(df.2$Happiness.Score, width = 0.3, fill = "lightgray") +
+    theme_transparent()
+xbp_grob = ggplotGrob(xbp)
+ybp_grob = ggplotGrob(ybp)
+xmin = min(df.2$Freedom); xmax = max(df.2$Freedom)
+ymin = min(df.2$Happiness.Score); ymax = max(df.2$Happiness.Score)
+yoffset = (1/15)*ymax; xoffset = (1/15)*xmax
+p.4 = sp + annotation_custom(grob = xbp_grob, xmin = xmin, xmax = xmax, 
+                             ymin = ymin-yoffset, ymax = ymin+yoffset) +
+    annotation_custom(grob = ybp_grob,
+                      xmin = xmin-xoffset, xmax = xmin+xoffset, 
+                      ymin = ymin, ymax = ymax)
+
+# Generosity
+sp = ggscatter(df.2, x = "Generosity", y = "Happiness.Score",
+               color = "Continent", palette = "jco",
+               size = 2, alpha = 0.6)
+xbp = ggboxplot(df.2$Generosity, width = 0.3, fill = "lightgray") +
+    rotate() +
+    theme_transparent()
+ybp = ggboxplot(df.2$Happiness.Score, width = 0.3, fill = "lightgray") +
+    theme_transparent()
+xbp_grob = ggplotGrob(xbp)
+ybp_grob = ggplotGrob(ybp)
+xmin = min(df.2$Generosity); xmax = max(df.2$Generosity)
+ymin = min(df.2$Happiness.Score); ymax = max(df.2$Happiness.Score)
+yoffset = (1/15)*ymax; xoffset = (1/15)*xmax
+p.5 = sp + annotation_custom(grob = xbp_grob, xmin = xmin, xmax = xmax, 
+                             ymin = ymin-yoffset, ymax = ymin+yoffset) +
+    annotation_custom(grob = ybp_grob,
+                      xmin = xmin-xoffset, xmax = xmin+xoffset, 
+                      ymin = ymin, ymax = ymax)
+
+# Trust
+sp = ggscatter(df.2, x = "Trust", y = "Happiness.Score",
+               color = "Continent", palette = "jco",
+               size = 2, alpha = 0.6)
+xbp = ggboxplot(df.2$Trust, width = 0.3, fill = "lightgray") +
+    rotate() +
+    theme_transparent()
+ybp = ggboxplot(df.2$Happiness.Score, width = 0.3, fill = "lightgray") +
+    theme_transparent()
+xbp_grob = ggplotGrob(xbp)
+ybp_grob = ggplotGrob(ybp)
+xmin = min(df.2$Trust); xmax = max(df.2$Trust)
+ymin = min(df.2$Happiness.Score); ymax = max(df.2$Happiness.Score)
+yoffset = (1/15)*ymax; xoffset = (1/15)*xmax
+p.6 = sp + annotation_custom(grob = xbp_grob, xmin = xmin, xmax = xmax, 
+                             ymin = ymin-yoffset, ymax = ymin+yoffset) +
+    annotation_custom(grob = ybp_grob,
+                      xmin = xmin-xoffset, xmax = xmin+xoffset, 
+                      ymin = ymin, ymax = ymax)
+
+ggarrange(p.1, p.2, p.3, p.4, p.5, p.6, nrow = 2, ncol = 3)
+```
+
+We can know in a picture that "Happiness Score" has postive correlation with Life.Expectancy, Economy, Family, and Freedom, but has no correlation with Generosity and Trust.
+
+### 3D Plot <a name = "3.7"></a>
+
+```{r, fig.width = 6, fig.height = 6}
+# 3D plot
+scatter3D(x = df.2$Life.Expectancy, y = df.2$Economy, z = df.2$Happiness.Score, 
+          colvar = as.integer(df.2$Continent), col = brewer.pal(n = 6, name = "Spectral"),
+          bty = "b2", phi = 0, pch = 20, type = "h", cex = 1, ticktype = "simple",
+          colkey = list(at = c(1.40, 2.25, 3.1, 3.9, 4.75, 5.60), labels = levels(df.2$Continent),
+                        width = 0.5, side = 1, cex.axis = 0.6),
+          main = "Happiness data", xlab = "Life.Expectancy", ylab ="Economy", zlab = "Happiness.Score")
+# text3D(x = df.2$Life.Expectancy, y = df.2$Economy, z = df.2$Happiness.Score,
+#        labels = df.2$Country, add = T, colkey = F, cex = 0.6, alpha = 0.5)
+```
+
+```{r, fig.width = 6, fig.height = 6}
+# 3D plot with projection
+scatter3D_fancy = function(x, y, z, ..., group)
+{
+    panelfirst = function(pmat) {
+        XY = trans3D(x, y, z = rep(min(z), length(z)), pmat = pmat)
+        scatter2D(XY$x, XY$y, colvar = group, pch = ".", col = brewer.pal(n = 6, name = "Spectral"),
+                  cex = 2, add = T, colkey = F)
+        XY = trans3D(x = rep(min(x), length(x)), y, z, pmat = pmat)
+        scatter2D(XY$x, XY$y, colvar = group, pch = ".", col = brewer.pal(n = 6, name = "Spectral"),
+                  cex = 2, add = T, colkey = F)
+    }
+    scatter3D(x, y, z, ..., colvar = group, col = brewer.pal(n = 6, name = "Spectral"),
+              panel.first = panelfirst,
+              colkey = list(at = c(1.40, 2.25, 3.1, 3.9, 4.75, 5.60), labels = levels(df.2$Continent),
+                            width = 0.5, side = 1, cex.axis = 0.6)) 
+}
+scatter3D_fancy(x = df.2$Life.Expectancy, y = df.2$Economy, z = df.2$Happiness.Score, 
+                group = as.integer(df.2$Continent), pch = 16, theta = 15, d = 2,
+                main = "Happiness data", xlab = "Life.Expectancy", ylab ="Economy", zlab = "Happiness.Score")
+```
+
+```{r, fig.width = 8, fig.height = 8}
+# interactive 3D plot with plane
+scatter3d(x = df.2$Economy, y = df.2$Happiness.Score, z = df.2$Family,
+          groups = df.2$Continent, axis.scales = F, grid = F,
+          xlab = "Economy", ylab ="Happiness.Score", zlab = "Family")
+rglwidget()
+```
+
+According to the multiple linear regression result, we can know the most significant estimates are Family and Economy. As considering a set of Family and Economy variables, we can have each continent with its Happiness.Score in a plane. We can tell Australia is the happiest and Asia the unhappiest based on only considering its social support and country economy.
+
+```{r, fig.width = 8, fig.height = 8}
+# interactive 3D plot with plane
+scatter3d(x = df.2$Generosity, y = df.2$Happiness.Score, z = df.2$Trust,
+          groups = df.2$Continent, axis.scales = F, grid = F,
+          xlab = "Generosity", ylab ="Happiness.Score", zlab = "Trust")
+rglwidget()
+```
+
+According to the multiple linear regression result, we can know Generosity and Trust are not significant. We can tell this finding also by the slope of the plane. Also, we can know Africa is the unhappiest in terms of considering its government corruption and public generosity.
+
+```{r, fig.width = 8, fig.height = 8}
+# interactive 3D plot with point
+plot_ly(x = df.2$Life.Expectancy, y = df.2$Economy, z = df.2$Happiness.Score,
+        type = "scatter3d", color = df.2$Continent, mode = "markers") %>%
+    add_trace(text = df.2$Country, hoverinfo = "text", showlegend = F) %>% 
+    layout(title = "Happiness data", 
+           scene = list(xaxis = list(title = "LE"), 
+                        yaxis = list(title = "EC"), 
+                        zaxis = list(title = "HS"),
+                        annotations = list(list(x = df.2$Life.Expectancy[which(df.2$Country == "Taiwan")], 
+                                                y = df.2$Economy[which(df.2$Country == "Taiwan")], 
+                                                z = df.2$Happiness.Score[which(df.2$Country == "Taiwan")], 
+                                                text = "Taiwan", arrowhead = 1, 
+                                                xanchor = "left", yanchor = "bottom", opacity = 0.7))))
+```
+
+## Prediction <a name = "4"></a>
+
+### Partition <a name = "4.1"></a>
+
+```{r}
+set.seed(123)
+dataset = df.2[, 4:10]
+split = sample.split(dataset$Happiness.Score, SplitRatio = 0.8)
+train.set = subset(dataset, split == T)
+test.set = subset(dataset, split == F)
+```
+
+### Machine learning algorithms <a name = "4.2"></a>
+
+#### Multiple Linear Regression <a name = "4.2.1"></a>
+
+```{r}
+reg.mlr = lm(formula = Happiness.Score ~ .,
+             data = train.set)
+summary(reg.mlr)
+```
+
+The summary shows that Economy, Family, Life.Expectancy, and Freedom have a significant impact. The adjusted R squared is 0.7611. The 76% of the dependent variable (Happiness.Score) can be explained by the model’s inputs (the independent variables).
+
+```{r}
+pred.mlr = predict(reg.mlr, newdata = test.set)
+pred.actual.mlr = as.data.frame(cbind(Prediction = pred.mlr, Actual = test.set$Happiness.Score))
+error = accuracy(pred.mlr, test.set$Happiness.Score)
+rmse.mlr = format(round(error[2], 4), nsmall = 4) %>% as.numeric()
+gg.mlr = ggplot(pred.actual.mlr, aes(x = Actual, y = Prediction)) +
+    geom_point() + theme_bw() + geom_abline() +
+    labs(title = "Multiple Linear Regression", subtitle = paste0("RMSE: ", rmse.mlr),
+         x = "Actual happiness score", y = "Predicted happiness score") +
+    theme(plot.title = element_text(face = "bold", size = (15)),
+          plot.subtitle = element_text(size = (10)),
+          axis.title = element_text(size = (10)))
+gg.mlr
+```
+
+#### Support Vector Regression <a name = "4.2.2"></a>
+
+```{r}
+reg.svr = svm(formula = Happiness.Score ~ .,
+              data = train.set,
+              type = "eps-regression",
+              kernel = "radial")
+```
+
+```{r}
+pred.svr = predict(reg.svr, newdata = test.set)
+pred.actual.svr = as.data.frame(cbind(Prediction = pred.svr, Actual = test.set$Happiness.Score))
+error = accuracy(pred.svr, test.set$Happiness.Score)
+rmse.svr = format(round(error[2], 4), nsmall = 4) %>% as.numeric()
+gg.svr = ggplot(pred.actual.svr, aes(x = Actual, y = Prediction)) +
+    geom_point() + theme_bw() + geom_abline() +
+    labs(title = "Support Vector Regression", subtitle = paste0("RMSE: ", rmse.svr),
+         x = "Actual happiness score", y = "Predicted happiness score") +
+    theme(plot.title = element_text(face = "bold", size = (15)),
+          plot.subtitle = element_text(size = (10)),
+          axis.title = element_text(size = (10)))
+gg.svr
+```
+
+#### Decision Tree <a name = "4.2.3"></a>
+
+```{r}
+reg.dt = rpart(formula = Happiness.Score ~ .,
+               data = train.set,
+               control = rpart.control(minisplit = 10))
+```
+
+```{r, fig.width = 12, fig.height = 4}
+# generating rule table for all countries in the world 156
+reg.dt.all = rpart(formula = Happiness.Score ~ ., data = dataset, control = rpart.control(minisplit = 10))
+rpart.rules(reg.dt.all, cover = T, roundint = F) %>% ggtexttable(rows = NULL, theme = ttheme("classic"))
+```
+
+As taking an example, the Happiness.Score is 3.6 when Family < 1.2 & Economy < 0.49 & Freedom < 0.24. This group covers 6% of the total, which has 9 countries in this classification. Thus, totally, we have ten rules to classify the countries in the world.
+
+```{r}
+# generating tree plot for all countries in the world 156
+fancyRpartPlot(reg.dt.all)
+```
+
+```{r}
+pred.dt = predict(reg.dt, newdata = test.set)
+pred.actual.dt = as.data.frame(cbind(Prediction = pred.dt, Actual = test.set$Happiness.Score))
+error = accuracy(pred.dt, test.set$Happiness.Score)
+rmse.dt = format(round(error[2], 4), nsmall = 4) %>% as.numeric()
+gg.dt = ggplot(pred.actual.dt, aes(x = Actual, y = Prediction)) +
+    geom_point() + theme_bw() + geom_abline() +
+    labs(title = "Decision Tree", subtitle = paste0("RMSE: ", rmse.dt),
+         x = "Actual happiness score", y = "Predicted happiness score") +
+    theme(plot.title = element_text(face = "bold", size = (15)),
+          plot.subtitle = element_text(size = (10)),
+          axis.title = element_text(size = (10)))
+gg.dt
+```
+
+#### Random Forest <a name = "4.2.4"></a>
+
+```{r}
+set.seed(123)
+reg.rf = randomForest(x = train.set[, -1], y = train.set$Happiness.Score, ntree = 500)
+```
+
+```{r}
+pred.rf = predict(reg.rf, newdata = test.set)
+pred.actual.rf = as.data.frame(cbind(Prediction = pred.rf, Actual = test.set$Happiness.Score))
+error = accuracy(pred.rf, test.set$Happiness.Score)
+rmse.rf = format(round(error[2], 4), nsmall = 4) %>% as.numeric()
+gg.rf = ggplot(pred.actual.rf, aes(x = Actual, y = Prediction)) +
+    geom_point() + theme_bw() + geom_abline() +
+    labs(title = "Random Forest", subtitle = paste0("RMSE: ", rmse.rf),
+         x = "Actual happiness score", y = "Predicted happiness score") +
+    theme(plot.title = element_text(face = "bold", size = (15)),
+          plot.subtitle = element_text(size = (10)),
+          axis.title = element_text(size = (10)))
+gg.rf
+```
+
+#### Neural Net <a name = "4.2.5"></a>
+
+```{r}
+set.seed(123)
+reg.nn = neuralnet(formula = Happiness.Score ~ .,
+                   data = train.set,
+                   hidden = c(2, 1, 2),
+                   stepmax = 1e+6,
+                   linear.output = T)
+```
+
+```{r}
+pred.nn = compute(reg.nn, test.set[, 2:7])
+pred.actual.nn = as.data.frame(cbind(Prediction = pred.nn$net.result, Actual = test.set$Happiness.Score))
+colnames(pred.actual.nn) = c("Prediction", "Actual")
+error = accuracy(pred.actual.nn$Prediction, pred.actual.nn$Actual)
+rmse.nn = format(round(error[2], 4), nsmall = 4) %>% as.numeric()
+gg.nn = ggplot(pred.actual.nn, aes(x = Actual, y = Prediction)) +
+    geom_point() + theme_bw() + geom_abline() +
+    labs(title = "Neural Net", subtitle = paste0("RMSE: ", rmse.nn),
+         x = "Actual happiness score", y = "Predicted happiness score") +
+    theme(plot.title = element_text(face = "bold", size = (15)),
+          plot.subtitle = element_text(size = (10)),
+          axis.title = element_text(size = (10)))
+gg.nn
+```
+
+### Evaluation <a name = "4.3"></a>
+
+```{r, fig.width = 10, fig.height = 7.5}
+ggarrange(gg.rf, gg.nn, gg.svr, gg.mlr, gg.dt, nrow = 2, ncol = 3)
+```
+
+```{r, fig.width = 3, fig.height = 1}
+rmse = as.data.frame(cbind(MLR = rmse.mlr, SVR = rmse.svr, DT = rmse.dt, RF = rmse.rf, NN = rmse.nn))
+rmse %>% mutate(across(is.numeric, ~ round(., 2))) %>% ggtexttable(rows = "RMSE", theme = ttheme("classic"))
+```
+
+```{r, fig.width = 6, fig.height = 4}
+rmse %>% t() %>% as.data.frame() %>% arrange(V1) %>% 
+    mutate(ml.name = factor(c("RF", "NN", "SVR", "MLR", "DT"),
+                            levels = c("RF", "NN", "SVR", "MLR", "DT"))) %>% 
+    ggplot(aes(x = ml.name, y = V1)) + 
+    geom_bar(stat = "identity", width = 0.7) +
+    theme_bw() +
+    coord_cartesian(ylim = c(0.4, 0.6)) +
+    labs(title = "RMSE for different machine learning algorithms", y = "RMSE", x = NULL) +
+    theme(plot.title = element_text(face = "bold", size = (15)),
+          axis.title = element_text(size = (10)))
+```
+
+## Conclusion <a name = "5"></a>
+
+Although Australia has the highest Happiness.Score in any variable consideration, the insight is not meaningful at all due to lacking of enough sample size in the group. Therefore, North America is the happiest continent in the world. However, it is not a equally condition. The most equally happy continent in fact is Europe. There are some insights worthying to discuss. Firstly, Generosity surprisingly is not an impactful factor to contribute Happiness.Score. Secondly, the best regression is the neural random forest regression model. In the future, we can use this model to predict a new country or a new year index.
+
+## Reference <a name = "6"></a>
+
+1. [World Happiness Report - Keggle](https://tinyurl.com/yxsfrkr3) 
+2. [Happiness 2017 - Javad Zabihi](https://tinyurl.com/y28gso55)
